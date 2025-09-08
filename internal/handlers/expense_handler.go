@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +19,6 @@ func NewExpenseHandler(repo *repository.ExpenseRepo) *ExpenseHandler {
 	return &ExpenseHandler{Repo: repo}
 }
 
-// List all expenses for logged-in user
 func (h *ExpenseHandler) List(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
 	uid, ok := userIDVal.(uuid.UUID)
@@ -27,6 +27,28 @@ func (h *ExpenseHandler) List(c *gin.Context) {
 		return
 	}
 
+	// --- PAGINATION ---
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+
+	// --- SORTING ---
+	sortBy := c.DefaultQuery("sort_by", "date") // "date" atau "amount"
+	order := c.DefaultQuery("order", "desc")    // "asc" atau "desc"
+	if sortBy != "date" && sortBy != "amount" {
+		sortBy = "date"
+	}
+	if order != "asc" && order != "desc" {
+		order = "desc"
+	}
+
+	// --- FILTERS ---
 	var (
 		categoryID *uuid.UUID
 		startDate  *time.Time
@@ -49,12 +71,18 @@ func (h *ExpenseHandler) List(c *gin.Context) {
 		}
 	}
 
-	expenses, err := h.Repo.List(c, uid, categoryID, startDate, endDate)
+	// --- QUERY KE REPO ---
+	expenses, err := h.Repo.List(c, uid, categoryID, startDate, endDate, limit, offset, sortBy, order)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, expenses)
+
+	c.JSON(http.StatusOK, gin.H{
+		"page":     page,
+		"limit":    limit,
+		"expenses": expenses,
+	})
 }
 
 // Create new expense

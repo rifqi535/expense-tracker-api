@@ -31,6 +31,7 @@ category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
 user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+deleted_at TIMESTAMPTZ
 
 );
 CREATE INDEX IF NOT EXISTS idx_expenses_user ON expenses(user_id);
