@@ -1,15 +1,15 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
 	"github.com/rifqi535/expense-tracker-api/internal/config"
 	"github.com/rifqi535/expense-tracker-api/internal/handlers"
@@ -45,20 +45,19 @@ func main() {
 	// ⬆️
 
 	// 🔹 Koneksi ke database
-	dbpool, err := pgxpool.New(context.Background(), dsn)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("❌ gagal connect DB: %v", err)
 	}
-	defer dbpool.Close()
 	fmt.Println("✅ Database connected")
 
 	// 🔹 Setup Gin & route
 	r := gin.Default()
 
 	// repo & handler
-	categoryRepo := repository.NewCategoryRepo(dbpool)
-	expenseRepo := repository.NewExpenseRepo(dbpool)
-	authHandler := handlers.NewAuthHandler(dbpool)
+	categoryRepo := repository.NewCategoryRepo(db)
+	expenseRepo := repository.NewExpenseRepo(db)
+	authHandler := handlers.NewAuthHandler(db)
 	categoryHandler := handlers.NewCategoryHandler(categoryRepo)
 	expHandler := handlers.NewExpenseHandler(expenseRepo)
 

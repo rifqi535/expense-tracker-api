@@ -1,29 +1,36 @@
 package db
 
 import (
-	"context"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-func NewPool(dsn string) (*pgxpool.Pool, error) {
-	cfg, err := pgxpool.ParseConfig(dsn)
+func NewDb(dsn string) (*gorm.DB, error) {
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
+	// Konfigurasi pool (mirip pgxpool)
+	sqlDB.SetMaxOpenConns(25)                 // maksimum koneksi terbuka
+	sqlDB.SetMaxIdleConns(25)                 // maksimum koneksi idle
+	sqlDB.SetConnMaxLifetime(5 * time.Minute) // umur maksimal koneksi
+
+	// Cek koneksi
+	if err := sqlDB.Ping(); err != nil {
 		return nil, err
 	}
-	return pool, nil
+
+	return db, nil
 
 }

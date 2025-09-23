@@ -2,65 +2,54 @@ package repository
 
 import (
 	"context"
-	"errors"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rifqi535/expense-tracker-api/internal/models"
+	"gorm.io/gorm"
 )
 
-type CategoryRepo struct{ db *pgxpool.Pool }
+type CategoryRepo struct{ db *gorm.DB }
 
-func NewCategoryRepo(db *pgxpool.Pool) *CategoryRepo { return &CategoryRepo{db: db} }
+func NewCategoryRepo(db *gorm.DB) *CategoryRepo { return &CategoryRepo{db: db} }
 
 func (r *CategoryRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]models.Category, error) {
-	rows, err := r.db.Query(ctx, `SELECT id, title, user_id, created_at, updated_at FROM categories WHERE user_id=$1 ORDER BY title`, userID)
+	var categories []models.Category
+	err := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("title").
+		Find(&categories).Error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	return categories, nil
 
-	var out []models.Category
-	for rows.Next() {
-		var c models.Category
-		if err := rows.Scan(&c.ID, &c.Title, &c.UserID, &c.CreatedAt, &c.UpdatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
 }
 
 func (r *CategoryRepo) Create(ctx context.Context, c *models.Category) error {
-	_, err := r.db.Exec(ctx, `INSERT INTO categories(id, title, user_id) VALUES ($1,$2,$3)`, c.ID, c.Title, c.UserID)
-	return err
+	return r.db.WithContext(ctx).Create(c).Error
 }
 
 func (r *CategoryRepo) Update(ctx context.Context, userID, id uuid.UUID, title string) (bool, error) {
-	ct, err := r.db.Exec(ctx, `
-        UPDATE categories 
-        SET title=$1, updated_at=NOW() 
-        WHERE id=$2 AND user_id=$3`,
-		title, id, userID,
-	)
-	if err != nil {
-		return false, err
-	}
+	result := r.db.WithContext(ctx).
+		Model(&models.Category{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Updates(map[string]interface{}{
+			"title": title,
+		})
 
-	// Kalau tidak ada baris yang kena update, return false
-	return ct.RowsAffected() > 0, nil
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
 }
 
 func (r *CategoryRepo) Delete(ctx context.Context, userID, id uuid.UUID) (bool, error) {
-	// Cegah hapus bila dipakai? (opsional) Di sini biarkan DB constraint yang bicara.
-	ct, err := r.db.Exec(ctx, `DELETE FROM categories WHERE id=$1 AND user_id=$2`, id, userID)
-	if err != nil {
-		return false, err
-	}
-	return ct.RowsAffected() > 0, nil
-}
+	result := r.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", id, userID).
+		Delete(&models.Category{})
 
-func IsNotFound(err error) bool {
-	return errors.Is(err, pgx.ErrNoRows)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
 }

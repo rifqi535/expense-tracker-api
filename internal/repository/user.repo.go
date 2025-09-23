@@ -4,35 +4,39 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rifqi535/expense-tracker-api/internal/models"
+	"gorm.io/gorm"
 )
 
-type UserRepo struct{ db *pgxpool.Pool }
+type UserRepo struct{ db *gorm.DB }
 
-func NewUserRepo(db *pgxpool.Pool) *UserRepo { return &UserRepo{db: db} }
+func NewUserRepo(db *gorm.DB) *UserRepo { return &UserRepo{db: db} }
 
 func (r *UserRepo) Create(ctx context.Context, u *models.User) error {
-	_, err := r.db.Exec(ctx,
-		`INSERT INTO users(id, name, email, password_hash) VALUES ($1,$2,$3,$4)`,
-		u.ID, u.Name, u.Email, u.PasswordHash,
-	)
-	return err
+	return r.db.WithContext(ctx).Create(u).Error
 }
 
 func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, error) {
-	row := r.db.QueryRow(ctx, `SELECT id, name, email, password_hash, created_at, updated_at FROM users WHERE email=$1`, email)
 	var u models.User
-	if err := row.Scan(&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt); err != nil {
+
+	err := r.db.WithContext(ctx).
+		Where("email = ?", email).
+		First(&u).Error
+
+	if err != nil {
 		return nil, err
 	}
 	return &u, nil
 }
 
 func (r *UserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
-	row := r.db.QueryRow(ctx, `SELECT id, name, email, password_hash, created_at, updated_at FROM users WHERE id=$1`, id)
 	var u models.User
-	if err := row.Scan(&u.ID, &u.Name, &u.Email, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt); err != nil {
+
+	err := r.db.WithContext(ctx).
+		Where("id = ?", id).
+		First(&u).Error
+
+	if err != nil {
 		return nil, err
 	}
 	return &u, nil
